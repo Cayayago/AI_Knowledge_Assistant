@@ -1,0 +1,32 @@
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Cachés de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cachés de herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Artefactos de build / instalación local
+*.egg-info/
+build/
+dist/
+
+# Variables de entorno y secretos (NUNCA se versionan)
+.env
+.env.*
+!.env.example
+
+# IDE / sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
