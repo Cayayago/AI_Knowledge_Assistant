@@ -1,0 +1,50 @@
+Ejemplo completo de una llamada a herramienta (tool calling)
+=============================================================
+
+1) JSON Schema que recibe el LLM para la herramienta calculate_study_hours
+   (lo genera HoursArgs.model_json_schema()):
+
+{
+  "type": "object",
+  "properties": {
+    "hours_per_day": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 12
+    },
+    "days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 31
+    }
+  },
+  "required": [
+    "hours_per_day",
+    "days"
+  ],
+  "additionalProperties": false
+}
+
+2) Pregunta del usuario:
+
+Si estudio 2 horas diarias durante 5 días, ¿cuántas horas estudiaré?
+
+3) El LLM pide ejecutar la herramienta (tool_call):
+
+{
+  "name": "calculate_study_hours",
+  "arguments": "{\"hours_per_day\":2,\"days\":5}"
+}
+
+4) Resultado que devuelve execute_tool (mensaje role=tool):
+
+{
+  "ok": true,
+  "data": {
+    "total_hours": 10.0
+  }
+}
+
+5) Respuesta final del LLM:
+
+Estudiarás un total de 10 horas durante los cinco días.
