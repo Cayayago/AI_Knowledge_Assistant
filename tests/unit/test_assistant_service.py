@@ -1,35 +1,41 @@
 import pytest
 
-from app.schemas.chat import ChatResponse
-from app.services.assistant_service import BootstrapAssistantService
+from app.services.assistant_service import SYSTEM_PROMPT, AssistantService
+from tests.conftest import FakeProvider
 
 
 @pytest.mark.asyncio
-async def test_service_answers_known_question() -> None:
-    """T-01: el servicio responde correctamente a una pregunta conocida."""
-    service = BootstrapAssistantService()
+async def test_service_returns_provider_answer() -> None:
+    provider = FakeProvider(answer="FastAPI es un framework web.")
+    service = AssistantService(provider)
 
-    response = await service.answer("¿Qué es FastAPI?")
+    answer = await service.ask("¿Qué es FastAPI?")
 
-    assert isinstance(response, ChatResponse)
-    assert "FastAPI es un framework" in response.answer
-    assert response.provider == "bootstrap-local"
+    assert answer == "FastAPI es un framework web."
 
 
 @pytest.mark.asyncio
-async def test_service_is_case_insensitive() -> None:
-    service = BootstrapAssistantService()
+async def test_service_sends_system_prompt_and_question() -> None:
+    provider = FakeProvider()
+    service = AssistantService(provider)
 
-    response = await service.answer("explícame PYDANTIC")
+    await service.ask("¿Qué es Pydantic?")
 
-    assert "Pydantic valida" in response.answer
+    messages = provider.calls[0]["messages"]
+    assert messages[0] == {"role": "system", "content": SYSTEM_PROMPT}
+    assert messages[1] == {"role": "user", "content": "¿Qué es Pydantic?"}
 
 
 @pytest.mark.asyncio
-async def test_service_returns_default_for_unknown_question() -> None:
-    service = BootstrapAssistantService()
+async def test_service_forwards_generation_parameters() -> None:
+    provider = FakeProvider()
+    service = AssistantService(provider)
 
-    response = await service.answer("¿Cuál es la capital de Francia?")
+    await service.ask(
+        "¿Qué es AsyncIO?", temperature=0.9, top_p=0.5, max_tokens=50
+    )
 
-    assert response.answer == BootstrapAssistantService.default_answer
-    assert response.provider == "bootstrap-local"
+    call = provider.calls[0]
+    assert call["temperature"] == 0.9
+    assert call["top_p"] == 0.5
+    assert call["max_tokens"] == 50
