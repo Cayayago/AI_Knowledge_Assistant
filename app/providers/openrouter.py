@@ -1,10 +1,17 @@
+from typing import Any
+
 import httpx
 
 from app.providers.base import LLMProviderError
 
 
 class OpenRouterProvider:
-    """Proveedor LLM que usa la API de OpenRouter (compatible con OpenAI)."""
+    """Proveedor LLM que usa la API de OpenRouter (compatible con OpenAI).
+
+    - generate(): respuesta de texto (POST /api/v1/chat).
+    - complete_with_tools(): respuesta que puede pedir herramientas
+      (POST /api/v1/agent/chat, Módulo III).
+    """
 
     name = "openrouter"
 
@@ -23,13 +30,15 @@ class OpenRouterProvider:
         # transport permite simular OpenRouter en las pruebas (sin red).
         self._transport = transport
 
-    async def generate(
+    async def _request(
         self,
-        messages: list[dict[str, str]],
-        temperature: float = 0.3,
-        top_p: float = 1.0,
-        max_tokens: int = 300,
-    ) -> str:
+        messages: list[dict[str, Any]],
+        temperature: float,
+        top_p: float,
+        max_tokens: int,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Llama a /chat/completions y devuelve el primer choice."""
 
         if not self.api_key:
             raise LLMProviderError(
@@ -41,7 +50,7 @@ class OpenRouterProvider:
             "Content-Type": "application/json",
         }
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
@@ -50,6 +59,10 @@ class OpenRouterProvider:
             # Sin streaming: se recibe la respuesta completa de una vez.
             "stream": False,
         }
+
+        if tools is not None:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         try:
             async with httpx.AsyncClient(
@@ -92,24 +105,56 @@ class OpenRouterProvider:
 
         try:
             choice = data["choices"][0]
-            content = choice["message"]["content"]
+            if not isinstance(choice["message"], dict):
+                raise TypeError("Mensaje inválido")
+            return choice
 
-            if not isinstance(content, str) or not content.strip():
-                # Modelos de razonamiento: si max_tokens se agota mientras
-                # "piensan", la respuesta visible (content) llega vacía.
-                if choice.get("finish_reason") == "length":
-                    raise LLMProviderError(
-                        "El modelo agotó max_tokens antes de responder; "
-                        "aumenta max_tokens (los modelos de razonamiento "
-                        "gastan tokens pensando)"
-                    )
-                raise ValueError("Respuesta vacía")
-            return content.strip()
-
-        except (KeyError, IndexError, TypeError, ValueError) as exc:
+        except (KeyError, IndexError, TypeError) as exc:
             raise LLMProviderError(
                 "Formato de respuesta LLM inválido"
             ) from exc
+
+    async def generate(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.3,
+        top_p: float = 1.0,
+        max_tokens: int = 300,
+    ) -> str:
+        choice = await self._request(
+            messages, temperature, top_p, max_tokens
+        )
+
+        content = choice["message"].get("content")
+
+        if not isinstance(content, str) or not content.strip():
+            # Modelos de razonamiento: si max_tokens se agota mientras
+            # "piensan", la respuesta visible (content) llega vacía.
+            if choice.get("finish_reason") == "length":
+                raise LLMProviderError(
+                    "El modelo agotó max_tokens antes de responder; "
+                    "aumenta max_tokens (los modelos de razonamiento "
+                    "gastan tokens pensando)"
+                )
+            raise LLMProviderError(
+                "Formato de respuesta LLM inválido"
+            )
+
+        return content.strip()
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.3,
+        top_p: float = 1.0,
+        max_tokens: int = 300,
+    ) -> dict[str, Any]:
+        """Devuelve el mensaje del asistente (content y/o tool_calls)."""
+        choice = await self._request(
+            messages, temperature, top_p, max_tokens, tools=tools
+        )
+        return choice["message"]
 
     @staticmethod
     def _error_message(response: httpx.Response) -> str:

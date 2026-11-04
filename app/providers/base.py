@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class LLMProviderError(Exception):
@@ -29,3 +29,26 @@ class LLMProvider(Protocol):
         # Los puntos suspensivos indican que la implementación la aporta
         # cada clase concreta que cumpla este protocolo.
         ...
+
+
+class ToolCallingProvider(Protocol):
+    """Contrato de un proveedor que soporta tool calling (Módulo III).
+
+    complete_with_tools devuelve el mensaje del asistente completo, que
+    puede traer texto (content) o una lista de tool_calls.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def model(self) -> str: ...
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.3,
+        top_p: float = 1.0,
+        max_tokens: int = 300,
+    ) -> dict[str, Any]: ...
