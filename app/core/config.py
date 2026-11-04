@@ -1,21 +1,47 @@
 """Configuración central de la aplicación.
 
-Se concentra aquí el nombre, la versión y el entorno para no repetir
-esos valores en varios archivos (main.py, /health, /api/v1/info).
-No se usan secretos ni archivos .env en este incremento.
+Los valores sensibles (la API key de OpenRouter) se leen de variables de
+entorno o de un archivo .env local que NUNCA se sube a Git.
+Ver .env.example para saber qué variables definir.
 """
 
 import os
+from dataclasses import dataclass
 
-from pydantic import BaseModel
+from dotenv import load_dotenv
 
-
-class Settings(BaseModel):
-    app_name: str = "AI Knowledge Assistant"
-    service_id: str = "ai-knowledge-assistant"
-    version: str = "0.1.0"
-    environment: str = os.getenv("APP_ENV", "development")
-    llm_enabled: bool = False  # Módulo 0: todavía NO hay LLM integrado.
+# Carga las variables del archivo .env (si existe) en os.environ.
+load_dotenv()
 
 
-settings = Settings()
+@dataclass(frozen=True)
+class Settings:
+    app_name: str
+    service_id: str
+    version: str
+    environment: str
+    openrouter_api_key: str
+    openrouter_model: str
+    openrouter_base_url: str
+
+    @property
+    def llm_enabled(self) -> bool:
+        """El LLM está habilitado solo si hay una API key configurada."""
+        return bool(self.openrouter_api_key)
+
+
+def get_settings() -> Settings:
+    return Settings(
+        app_name="AI Knowledge Assistant",
+        service_id="ai-knowledge-assistant",
+        version="0.2.0",
+        environment=os.getenv("APP_ENV", "development"),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
+        openrouter_model=os.getenv(
+            "OPENROUTER_MODEL", "openrouter/free"
+        ),
+        openrouter_base_url=os.getenv(
+            "OPENROUTER_BASE_URL",
+            "https://openrouter.ai/api/v1",
+        ),
+    )
