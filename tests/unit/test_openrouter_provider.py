@@ -4,6 +4,8 @@ httpx.MockTransport intercepta la petición HTTP y devuelve una respuesta
 simulada, así se prueba el código real del proveedor sin gastar créditos.
 """
 
+import json
+
 import httpx
 import pytest
 
@@ -113,3 +115,40 @@ async def test_generate_error_inside_200_response_raises() -> None:
 
     with pytest.raises(LLMProviderError, match="Provider returned error"):
         await provider.generate(MESSAGES)
+
+
+@pytest.mark.asyncio
+async def test_complete_with_tools_sends_tools_and_returns_message() -> None:
+    seen = {}
+    tools = [{"type": "function", "function": {"name": "f", "parameters": {}}}]
+    message = {
+        "content": None,
+        "tool_calls": [
+            {"id": "c1", "type": "function",
+             "function": {"name": "f", "arguments": "{}"}}
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.read())
+        return httpx.Response(200, json={"choices": [{"message": message}]})
+
+    result = await make_provider(handler).complete_with_tools(MESSAGES, tools)
+
+    assert result == message
+    assert seen["body"]["tools"] == tools
+    assert seen["body"]["tool_choice"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_generate_does_not_send_tools() -> None:
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.read())
+        return httpx.Response(200, json={"choices": [{"message": {"content": "Hola"}}]})
+
+    await make_provider(handler).generate(MESSAGES)
+
+    assert "tools" not in seen["body"]
+    assert "tool_choice" not in seen["body"]

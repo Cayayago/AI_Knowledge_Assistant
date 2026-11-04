@@ -1,4 +1,6 @@
+import copy
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -42,6 +44,44 @@ class FakeProvider:
         if self.fail:
             raise LLMProviderError("OpenRouter respondió HTTP 500")
         return self.answer
+
+
+class FakeToolProvider:
+    """Proveedor falso con tool calling: entrega respuestas guionadas.
+
+    Cada llamada a complete_with_tools devuelve la siguiente respuesta de
+    la lista y guarda una copia de los mensajes que recibió.
+    """
+
+    name = "fake"
+    model = "fake-model"
+
+    def __init__(self, responses: list[dict[str, Any]] | None = None, fail: bool = False):
+        self.responses = list(responses or [])
+        self.fail = fail
+        self.calls: list[dict[str, Any]] = []
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.3,
+        top_p: float = 1.0,
+        max_tokens: int = 300,
+    ) -> dict[str, Any]:
+        self.calls.append({"messages": copy.deepcopy(messages), "tools": tools})
+        if self.fail:
+            raise LLMProviderError("OpenRouter respondió HTTP 500")
+        return self.responses.pop(0)
+
+
+def tool_call(name: str, arguments: str, call_id: str = "call_1") -> dict[str, Any]:
+    """Construye un tool_call con el formato que devuelve OpenRouter."""
+    return {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": name, "arguments": arguments},
+    }
 
 
 @pytest.fixture(autouse=True)

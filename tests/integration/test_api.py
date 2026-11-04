@@ -1,7 +1,10 @@
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import FakeProvider
+from app.api.agent import get_agent_service
+from app.main import app
+from app.services.agent_service import AgentService
+from tests.conftest import FakeProvider, FakeToolProvider, tool_call
 
 
 @pytest.mark.asyncio
@@ -106,7 +109,7 @@ async def test_info_without_api_key_reports_llm_disabled(
     body = response.json()
     assert body["llm_enabled"] is False
     assert body["name"] == "AI Knowledge Assistant"
-    assert body["version"] == "0.2.0"
+    assert body["version"] == "0.3.0"
     assert body["llm_provider"] == "openrouter"
     assert body["llm_model"] == "openrouter/free"
 
@@ -130,4 +133,66 @@ async def test_docs_and_openapi_are_available(client: AsyncClient) -> None:
     assert docs.status_code == 200
     assert openapi.status_code == 200
     paths = openapi.json()["paths"]
-    assert {"/health", "/api/v1/chat", "/api/v1/info"} <= set(paths)
+    assert {"/health", "/api/v1/chat", "/api/v1/info", "/api/v1/agent/chat"} <= set(paths)
+
+
+def use_agent(provider: FakeToolProvider) -> None:
+    """Reemplaza el agente real por uno con proveedor falso."""
+    app.dependency_overrides[get_agent_service] = (
+        lambda: AgentService(provider)
+    )
+
+
+@pytest.mark.asyncio
+async def test_agent_chat_returns_answer_and_tools_used(
+    client: AsyncClient,
+) -> None:
+    use_agent(FakeToolProvider([
+        {"tool_calls": [tool_call("lookup_ai_concept", '{"concept": "rag"}')]},
+        {"content": "RAG combina recuperación y generación."},
+    ]))
+
+    response = await client.post(
+        "/api/v1/agent/chat", json={"question": "¿Qué es RAG?"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "RAG combina recuperación y generación.",
+        "provider": "fake",
+        "model": "fake-model",
+        "tools_used": ["lookup_ai_concept"],
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"question": "¿Qué es RAG?", "max_steps": 6},
+        {"question": "¿Qué es RAG?", "max_steps": 0},
+        {"question": "a"},
+    ],
+)
+async def test_agent_chat_invalid_body_returns_422(
+    client: AsyncClient, body: dict
+) -> None:
+    response = await client.post("/api/v1/agent/chat", json=body)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_agent_chat_provider_error_returns_502(
+    client: AsyncClient,
+) -> None:
+    use_agent(FakeToolProvider(fail=True))
+
+    response = await client.post(
+        "/api/v1/agent/chat", json={"question": "¿Qué es RAG?"}
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == (
+        "No se pudo completar la ejecución del agente"
+    )
