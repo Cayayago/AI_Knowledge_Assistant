@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-knowledge-assistant"
-version = "0.2.0"
-description = "Enterprise AI Knowledge Assistant - API con integración LLM vía OpenRouter (Módulo 1)"
+version = "0.3.0"
+description = "Enterprise AI Knowledge Assistant - API con integración LLM vía OpenRouter y tool calling (Módulo 3)"
 readme = "README.md"
 requires-python = ">=3.12"
 

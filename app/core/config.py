@@ -34,7 +34,7 @@ def get_settings() -> Settings:
     return Settings(
         app_name="AI Knowledge Assistant",
         service_id="ai-knowledge-assistant",
-        version="0.2.0",
+        version="0.3.0",
         environment=os.getenv("APP_ENV", "development"),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         openrouter_model=os.getenv(
