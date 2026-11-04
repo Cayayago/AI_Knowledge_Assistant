@@ -6,3 +6,5 @@ class InfoResponse(BaseModel):
     version: str
     environment: str
     llm_enabled: bool
+    llm_provider: str
+    llm_model: str
